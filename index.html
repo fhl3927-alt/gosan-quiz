@@ -2,16 +2,37 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
     <title>고산교회 성경퀴즈 - 스마트 부저</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.4.7/peerjs.min.js"></script>
     <style>
-        *, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; background: #11141a; margin: 0; padding: 0; color: white; overflow-x: hidden; }
+        /* [iOS/안드로이드 공통] 터치 씹힘 및 더블탭 확대 방지, 본문 선택 차단 */
+        *, *::before, *::after { 
+            box-sizing: border-box; 
+            -webkit-tap-highlight-color: transparent; 
+            -webkit-user-select: none; 
+            user-select: none;
+        }
+        
+        /* 입력창은 글씨를 써야 하므로 예외 처리 */
+        input, textarea {
+            -webkit-user-select: text !important;
+            user-select: text !important;
+        }
+
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; 
+            background: #11141a; 
+            margin: 0; 
+            padding: 0; 
+            color: white; 
+            overflow-x: hidden;
+            touch-action: manipulation; /* iOS 더블클릭 딜레이 제거 */
+        }
         
         .admin-nav { display: grid; grid-template-columns: repeat(3, 1fr); background: #2d3748; padding: 6px; gap: 6px; position: sticky; top: 0; z-index: 5000; }
         
-        .nav-btn { padding: 12px 4px; font-size: 17px; font-weight: bold; border: 3px solid transparent; border-radius: 6px; cursor: pointer; color: #fff; text-align: center; transition: all 0.2s ease; }
+        .nav-btn { padding: 12px 4px; font-size: 17px; font-weight: bold; border: 3px solid transparent; border-radius: 6px; cursor: pointer; color: #fff; text-align: center; transition: all 0.2s ease; -webkit-appearance: none; }
         
         .nav-btn.speed-tab { background: #8e3a00; color: #e2e8f0; } 
         .nav-btn.speed-tab.active { background: #ff7e22; color: #ffffff; border-color: #ffffff; box-shadow: 0 0 12px rgba(255,126,34,0.8); }
@@ -26,10 +47,10 @@
         .top-info { background: #fff3cd; border: 2px solid #ffeeba; border-radius: 12px; padding: 12px; text-align: center; font-size: 17px; font-weight: bold; color: #856404; line-height: 1.4; }
         .net-status { font-size: 13px; margin-top: 5px; padding: 4px; border-radius: 6px; background: rgba(0,0,0,0.05); }
         
-        .p-select, .p-input { width: 100%; height: 60px; font-size: 22px; font-weight: bold; border: 3px solid #4a5568; border-radius: 12px; padding: 0 15px; text-align: center; background: white; }
-        .p-textarea { height: 180px; text-align: left; resize: none; padding: 15px; font-size: 20px; }
+        .p-select, .p-input { width: 100%; height: 60px; font-size: 22px; font-weight: bold; border: 3px solid #4a5568; border-radius: 12px; padding: 0 15px; text-align: center; background: white; -webkit-appearance: none; }
+        .p-textarea { height: 180px; text-align: left; resize: none; padding: 15px; font-size: 20px; -webkit-appearance: none; }
 
-        .king-buzzer { width: 100%; height: 140px; background: #e74c3c; color: white; font-size: 40px; font-weight: 900; border: none; border-radius: 25px; cursor: pointer; box-shadow: 0 12px 0 #c0392b; text-shadow: 2px 4px 6px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; transition: 0.1s; }
+        .king-buzzer { width: 100%; height: 140px; background: #e74c3c; color: white; font-size: 40px; font-weight: 900; border: none; border-radius: 25px; cursor: pointer; box-shadow: 0 12px 0 #c0392b; text-shadow: 2px 4px 6px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; transition: 0.1s; -webkit-appearance: none; }
         .king-buzzer:active { transform: translateY(12px); box-shadow: 0 0 0 #c0392b; }
         .king-buzzer.disabled { background: #cbd5e1 !important; box-shadow: 0 6px 0 #94a3b8 !important; color: #64748b !important; cursor: not-allowed; transform: none !important; }
 
@@ -131,7 +152,22 @@
 
 <script>
     const BROADCAST_ROOM_ID = 'church_bible_quiz_room_2026';
-    const PEER_CONFIG = { config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] } };
+    
+    // ✨ iOS 인앱 브라우저 및 Safari의 까다로운 WebRTC 연결 규격을 만족하는 최적화 설정
+    const PEER_CONFIG = { 
+        host: '0.peerjs.com',
+        port: 443,
+        secure: true,
+        config: { 
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' }, 
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' }
+            ],
+            sdpSemantics: 'unified-plan'
+        },
+        debug: 1
+    };
 
     let peer = null;
     let hostConn = null; 
@@ -140,9 +176,20 @@
     let currentMode = 'phone1'; 
 
     function initNetwork() {
+        if (peer) {
+            try { peer.destroy(); } catch(e) {}
+        }
+        
         peer = new Peer(PEER_CONFIG);
         peer.on('open', function() {
             connectToHost();
+        });
+
+        // ✨ iOS에서 빈번하게 일어나는 절전/네트워크 유실 시 자동 재접속 구문 추가
+        peer.on('error', function(err) {
+            if(err.type === 'disconnected' || err.type === 'network') {
+                setTimeout(initNetwork, 3000);
+            }
         });
     }
 
@@ -152,22 +199,22 @@
         statusLog.innerText = "🔄 전광판 시스템에 무선 연결을 시도 중...";
         statusLog.style.color = "#2980b9";
 
-        hostConn = peer.connect(BROADCAST_ROOM_ID, { reliable: true });
+        hostConn = peer.connect(BROADCAST_ROOM_ID, { 
+            reliable: true,
+            serialization: 'json'
+        });
 
         hostConn.on('open', function() {
             statusLog.innerText = "🟢 전광판 연결 성공! 버튼을 누르면 즉시 전송됩니다.";
             statusLog.style.color = "#27ae60";
         });
 
-        // ✨ [네트워크 리셋 분기 감지 로직 적용]
         hostConn.on('data', function(data) {
             if (data.type === 'RESET_COMMAND_MANUAL') {
-                // 관리자 강제 수동 버튼 리셋: 비활성화 풀고 alert 창 실행
                 clearSubmittedState();
                 alert("전광판이 리셋되어 다음 문제를 풀 수 있습니다!");
             } 
             else if (data.type === 'RESET_COMMAND_AUTO') {
-                // 4팀 제출 자동 리셋: 비활성화만 해제 (alert 미실행)
                 clearSubmittedState();
             }
         });
@@ -175,15 +222,19 @@
         hostConn.on('close', function() {
             statusLog.innerText = "🔴 연결 해제됨. 자동 재연결 시스템 가동 중...";
             statusLog.style.color = "#c0392b";
-            setTimeout(connectToHost, 1500);
+            setTimeout(connectToHost, 2000); // 아이폰의 딜레이 리셋에 맞춘 안정적 버퍼 시간
+        });
+
+        hostConn.on('error', function() {
+            setTimeout(connectToHost, 2000);
         });
     }
 
-    // ✨ 중복 제어를 묶은 정답 해제 공통 함수
     function clearSubmittedState() {
         isAllSubmitted = false;
         document.querySelectorAll('.all-btn').forEach(btn => btn.classList.remove('disabled'));
-        document.getElementById('input-subjective-all').value = "";
+        const subjectiveAll = document.getElementById('input-subjective-all');
+        if(subjectiveAll) subjectiveAll.value = "";
     }
 
     function changeMode(mode) {
@@ -216,7 +267,7 @@
         if (modeType === 'ALL_SUBMIT' && isAllSubmitted) return;
 
         if (!hostConn || !hostConn.open) {
-            alert("전광판과의 무선 연결이 원활하지 않습니다.");
+            alert("전광판과의 무선 연결이 원활하지 않습니다. 상단 표시기를 확인해 주세요.");
             return;
         }
 
@@ -241,7 +292,12 @@
             isSubjective: isSub 
         };
 
-        hostConn.send(payload);
+        try {
+            hostConn.send(payload);
+        } catch(e) {
+            alert("전송 도중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+            return;
+        }
 
         if (modeType === 'BUZZ') {
             isSpeedLocked = true;
@@ -249,7 +305,8 @@
             setTimeout(() => {
                 isSpeedLocked = false;
                 document.querySelectorAll('.speed-btn').forEach(btn => btn.classList.remove('disabled'));
-                document.getElementById('input-subjective-speed').value = "";
+                const subjectiveSpeed = document.getElementById('input-subjective-speed');
+                if(subjectiveSpeed) subjectiveSpeed.value = "";
             }, 5000);
         } else {
             isAllSubmitted = true;
@@ -257,8 +314,11 @@
         }
     }
 
-    window.onload = function() {
+    // iOS 초기 구동 시점 딜레이 보완 바인딩
+    if (document.readyState === 'complete') {
         initNetwork();
+    } else {
+        window.addEventListener('load', initNetwork);
     }
 </script>
 </body>
