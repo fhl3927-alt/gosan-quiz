@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>고산교회 성경퀴즈 - 전광판 시스템</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.4.7/peerjs.min.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+        body { font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; background: #0b0d11; margin: 0; padding: 0; color: white; overflow: hidden; }
+        
+        #section-screen { display: flex; flex-direction: column; justify-content: flex-start; align-items: center; width: 100vw; height: 100vh; padding: 1.5% 1.5% 4% 1.5%; position: relative; }
+        
+        /* 상단 타이틀 */
+        .ready-title { 
+            font-family: 'Helvetica Neue', Helvetica, Arial, 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif;
+            font-size: 2rem; 
+            font-weight: 300; 
+            color: #cbd5e1; 
+            text-align: center; 
+            letter-spacing: -0.5px; 
+            margin: 20px 0; 
+            animation: pulse 2s infinite; 
+        }
+        @keyframes pulse { 0% { opacity: 0.7; } 50% { opacity: 1; } 100% { opacity: 0.7; } }
+
+        .screen-grid { display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); gap: 20px; width: 96%; flex: 1; margin-bottom: 15px; }
+        
+        /* 카드 기본 스타일 */
+        .screen-card { border-radius: 25px; display: flex; flex-direction: column; justify-content: center; align-items: center; border: 5px solid #2d3748; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); padding: 20px; position: relative; overflow: hidden; }
+        
+        .sc-spring { background: #1e7e34; } 
+        .sc-summer { background: #5dade2; } 
+        .sc-autumn { background: #935116; } 
+        .sc-winter { background: #7f8c8d; } 
+        
+        /* 팀 이름: 기본 정중앙 배치 */
+        .sc-name { 
+            font-family: 'CookieRun', 'BM JUA', 'Jua', 'Comic Sans MS', 'HGMaruGothicMPRO', sans-serif; 
+            font-size: 8rem; 
+            font-weight: 900; 
+            margin: 0; 
+            text-shadow: 4px 4px 8px rgba(0,0,0,0.4);
+            letter-spacing: 4px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            opacity: 0.5;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            white-space: nowrap;
+            z-index: 1;
+        }
+        
+        /* 정답 제출 시 팀 이름 애니메이션 (상단으로 이동) */
+        .screen-card.submitted .sc-name {
+            font-size: 3.5rem;
+            top: 25px;
+            left: 35px;
+            transform: translate(0, 0);
+            opacity: 1;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        
+        /* 상태창 레이아웃 */
+        .sc-status { width: 100%; height: 100%; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; }
+        
+        /* 대기중 영문 크기 */
+        .sc-wait-text { 
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 3.2rem; 
+            font-weight: bold; 
+            color: rgba(255,255,255,0.35); 
+            text-shadow: 1px 2px 4px rgba(0,0,0,0.4); 
+            position: absolute;
+            bottom: 15px;
+            letter-spacing: 4px;
+        }
+        
+        /* 정답 제출한 팀의 박스테두리 번쩍임 효과 */
+        .screen-card.submitted {
+            border-color: #f1c40f;
+            animation: submitted-pulse 1.2s infinite alternate ease-in-out, scaleUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        @keyframes scaleUp { 0% { transform: scale(1); } 100% { transform: scale(1.02); } }
+        @keyframes submitted-pulse {
+            0% { box-shadow: 0 0 10px rgba(241, 196, 15, 0.4), inset 0 0 10px rgba(241, 196, 15, 0.2); border-color: #f1c40f; }
+            100% { box-shadow: 0 0 35px rgba(241, 196, 15, 0.9), inset 0 0 20px rgba(241, 196, 15, 0.5); border-color: #ffffff; }
+        }
+
+        /* 단체전 정답 배지 스타일 */
+        .all-ans-badge {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(11, 13, 17, 0.95); 
+            color: #f1c40f; 
+            border: 10px solid #f1c40f; 
+            padding: 10px 50px;
+            border-radius: 35px;
+            font-size: 11.2rem; 
+            font-weight: 900;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.6);
+            margin-bottom: 5px;
+            min-width: 300px;
+            min-height: 220px;
+            text-align: center;
+            word-break: break-all;
+            line-height: 1.0;
+            animation: bounceIn 0.4s ease forwards;
+        }
+
+        /* 단체전 OX 색상 클래스 */
+        .all-ans-badge.badge-o { background: #2563eb; color: #ffffff; border-color: #ffffff; }
+        .all-ans-badge.badge-x { background: #dc2626; color: #ffffff; border-color: #ffffff; }
+
+        .all-user-name { display: block; font-size: 2.5rem; font-weight: bold; color: rgba(255, 255, 255, 0.9); text-shadow: 1px 1px 5px rgba(0,0,0,0.8); animation: bounceIn 0.4s ease 0.1s forwards; opacity: 0; margin-top: 15px; }
+        @keyframes bounceIn { 0% { transform: scale(0.8); opacity: 0; } 50% { transform: scale(1.05); opacity: 0.8; } 100% { transform: scale(1); opacity: 1; } }
+
+        /* 개인전(스피드 퀴즈) 레이어 */
+        .winner-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 4000; justify-content: center; align-items: center; }
+        .winner-content { display: flex; flex-direction: row; width: 92%; max-width: 1500px; justify-content: center; align-items: center; gap: 60px; animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        @keyframes popIn { 0% { transform: scale(0.92); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+
+        .win-left { display: flex; flex-direction: column; align-items: center; gap: 30px; flex: 1; text-align: center; }
+        .win-team-name { font-family: 'CookieRun', 'BM JUA', 'Jua', 'HGMaruGothicMPRO', sans-serif; font-size: 11rem; font-weight: 900; display: block; text-shadow: 0 10px 25px rgba(0,0,0,0.6); }
+        .win-name-box { background: rgba(255, 255, 255, 0.2); border: 4px solid rgba(255, 255, 255, 0.6); padding: 25px 60px; border-radius: 25px; font-size: 5rem; font-weight: 900; color: #fff; box-shadow: 0 12px 30px rgba(0,0,0,0.4); backdrop-filter: blur(10px); width: 100%; max-width: 500px; }
+
+        .win-right { display: flex; flex-direction: column; align-items: center; gap: 15px; flex: 1.6; width: 100%; }
+        .win-answer-title { font-size: 4rem; font-weight: 900; color: #f1c40f; text-shadow: 0 4px 12px rgba(0,0,0,0.5); letter-spacing: 6px; }
+        
+        .win-answer-box { 
+            background: rgba(11, 13, 17, 0.94); border: 12px solid #f1c40f; padding: 30px; border-radius: 45px; width: 100%; min-height: 650px; 
+            display: flex; align-items: center; justify-content: center; font-size: 21rem; font-weight: 900; color: #ffffff; 
+            text-shadow: 0 8px 25px rgba(0,0,0,0.7); box-shadow: 0 30px 70px rgba(0,0,0,0.8); text-align: center; word-break: break-all; line-height: 1.0; 
+            animation: pulseBoom 0.6s infinite alternate; transition: all 0.3s ease;
+        }
+
+        .win-answer-box.win-badge-o { background: #2563eb !important; border-color: #ffffff !important; text-shadow: 0 8px 25px rgba(0,0,0,0.5); }
+        .win-answer-box.win-badge-x { background: #dc2626 !important; border-color: #ffffff !important; text-shadow: 0 8px 25px rgba(0,0,0,0.5); }
+
+        @keyframes pulseBoom { 0% { transform: scale(0.97); } 100% { transform: scale(1.03); } }
+
+        .win-spring { background: linear-gradient(135deg, #2ecc71, #27ae60); }
+        .win-summer { background: linear-gradient(135deg, #85c1e9, #3498db); } 
+        .win-autumn { background: linear-gradient(135deg, #e67e22, #d35400); }
+        .win-winter { background: linear-gradient(135deg, #bdc3c7, #7f8c8d); } 
+
+        /* 하단 푸터 */
+        .quiz-branding-footer { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); font-size: 16px; font-weight: 800; letter-spacing: -0.5px; text-align: center; pointer-events: none; opacity: 0.4; color: #ffffff; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+    </style>
+</head>
+<body>
+
+    <div id="section-screen">
+        <h1 class="ready-title" id="main-status-text">개인전은 누구나 참석할 수 있고, 단체전은 팀별 한사람만 가능해요!</h1>
+        <div class="screen-grid">
+            <div class="screen-card sc-spring" id="card-spring"><p class="sc-name">봄 🌿</p><div class="sc-status" id="status-spring"><span class="sc-wait-text">WAITING...</span></div></div>
+            <div class="screen-card sc-summer" id="card-summer"><p class="sc-name">여름 ☀️</p><div class="sc-status" id="status-summer"><span class="sc-wait-text">WAITING...</span></div></div>
+            <div class="screen-card sc-autumn" id="card-autumn"><p class="sc-name">가을 🍁</p><div class="sc-status" id="status-autumn"><span class="sc-wait-text">WAITING...</span></div></div>
+            <div class="screen-card sc-winter" id="card-winter"><p class="sc-name">겨울 ❄️</p><div class="sc-status" id="status-winter"><span class="sc-wait-text">WAITING...</span></div></div>
+        </div>
+        
+        <div id="winner-layer" class="winner-overlay">
+            <div class="winner-content">
+                <div class="win-left">
+                    <span class="win-team-name" id="win-team-span">봄</span>
+                    <div class="win-name-box" id="win-user-name">홍길동</div>
+                </div>
+                <div class="win-right">
+                    <div class="win-answer-title">정답</div>
+                    <div class="win-answer-box" id="win-answer-text">1번</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="quiz-branding-footer">2026 고산교회 성경퀴즈</div>
+    </div>
+
+<script>
+    const BROADCAST_ROOM_ID = 'church_bible_quiz_room_2026';
+    const PEER_CONFIG = { config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] } };
+
+    let peer = null;
+    let isLocked = false;
+    let connectedClients = []; 
+    let submittedTeams = new Set(); 
+
+    function playChimeSound() {
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            const ctx = new AudioContext();
+            const notes = [523.25, 659.25, 783.99, 1046.50]; 
+            let time = ctx.currentTime;
+            notes.forEach((freq) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(freq, time);
+                gain.gain.setValueAtTime(0.5, time); gain.gain.exponentialRampToValueAtTime(0.001, time + 0.8);
+                osc.connect(gain); gain.connect(ctx.destination);
+                osc.start(time); osc.stop(time + 0.8); time += 0.18; 
+            });
+        } catch(e) { console.log("오디오 재생 실패"); }
+    }
+
+    function initNetwork() {
+        peer = new Peer(BROADCAST_ROOM_ID, PEER_CONFIG);
+        peer.on('connection', function(conn) {
+            connectedClients.push(conn);
+            
+            conn.on('data', function(data) {
+                if (data.type === 'BUZZ') {
+                    if (!isLocked) {
+                        isLocked = true;
+                        triggerSpeedEvent(data);
+                    }
+                } 
+                else if (data.type === 'ALL_SUBMIT') {
+                    triggerAllSubmitEvent(data);
+                } 
+                else if (data.type === 'ADMIN_RESET') {
+                    executeReset('MANUAL');
+                }
+            });
+
+            conn.on('close', function() {
+                connectedClients = connectedClients.filter(c => c !== conn);
+            });
+        });
+    }
+
+    function triggerSpeedEvent(data) {
+        const layer = document.getElementById('winner-layer');
+        const teamSpan = document.getElementById('win-team-span');
+        const userBox = document.getElementById('win-user-name');
+        const answerBox = document.getElementById('win-answer-text');
+        const statusText = document.getElementById('main-status-text');
+
+        playChimeSound();
+        statusText.innerText = "📢 정답 선점 완료! 전광판 화면을 확인해 주세요.";
+        statusText.style.color = "#e74c3c";
+
+        document.getElementById('status-' + data.teamId).innerHTML = `[${data.answer}]<br><span style="font-size:0.6em;">(${data.userName})</span>`;
+        document.getElementById('card-' + data.teamId).style.transform = "scale(1.05)";
+
+        layer.className = "winner-overlay " + data.colorClass;
+        teamSpan.innerText = data.teamName;
+        userBox.innerText = data.userName;
+        
+        const ans = data.answer ? data.answer.trim() : "";
+        
+        answerBox.className = "win-answer-box"; 
+        if (ans === "O" || ans === "o") {
+            answerBox.classList.add("win-badge-o");
+        } else if (ans === "X" || ans === "x") {
+            answerBox.classList.add("win-badge-x");
+        }
+        
+        if (data.isSubjective || ans.length >= 3) {
+            answerBox.style.fontSize = "14rem";
+        } else {
+            answerBox.style.fontSize = "21rem"; 
+        }
+        
+        answerBox.innerText = ans;
+        layer.style.display = "flex";
+
+        setTimeout(() => {
+            layer.style.display = "none";
+            statusText.innerText = "개인전은 누구나 참석할 수 있고, 단체전은 팀별 한사람만 가능해요!";
+            statusText.style.color = "#cbd5e1";
+            document.getElementById('status-' + data.teamId).innerHTML = '<span class="sc-wait-text">WAITING...</span>';
+            document.getElementById('card-' + data.teamId).style.transform = "scale(1)";
+            isLocked = false;
+        }, 5000);
+    }
+
+    function triggerAllSubmitEvent(data) {
+        playChimeSound();
+        const card = document.getElementById('card-' + data.teamId);
+        const status = document.getElementById('status-' + data.teamId);
+        
+        card.classList.add('submitted');
+        submittedTeams.add(data.teamId);
+        
+        const ans = data.answer ? data.answer.trim() : "";
+        
+        let colorClass = "";
+        if (ans === "O" || ans === "o") {
+            colorClass = " badge-o";
+        } else if (ans === "X" || ans === "x") {
+            colorClass = " badge-x";
+        }
+
+        let dynamicFontSize = "11.2rem"; 
+        if (ans.length >= 3) {
+            if (ans.length <= 5) {
+                dynamicFontSize = "5.5rem";
+            } else if (ans.length <= 8) {
+                dynamicFontSize = "4.0rem";
+            } else {
+                dynamicFontSize = "2.8rem";
+            }
+        }
+
+        status.innerHTML = `
+            <span class="all-ans-badge${colorClass}" style="font-size: ${dynamicFontSize};">
+                ${ans}
+            </span>
+            <span class="all-user-name">${data.userName}</span>
+        `;
+
+        // ✨ 4팀 모두 정답 제출 시 7초 카운트다운 후 자동 리셋 작동
+        if (submittedTeams.size === 4) {
+            document.getElementById('main-status-text').innerText = "🎉 모든 팀 정답 제출 완료! 7초 후 다음 문제로 자동 전환됩니다.";
+            document.getElementById('main-status-text').style.color = "#2ecc71";
+            
+            setTimeout(() => {
+                executeReset('AUTO');
+            }, 7000); // 7초(7000ms) 유지 세팅 완료
+        }
+    }
+
+    function executeReset(resetMode) {
+        document.getElementById('winner-layer').style.display = "none";
+        document.getElementById('main-status-text').innerText = "개인전은 누구나 참석할 수 있고, 단체전은 팀별 한사람만 가능해요!";
+        document.getElementById('main-status-text').style.color = "#cbd5e1";
+        isLocked = false;
+        submittedTeams.clear();
+
+        ['spring','summer','autumn','winter'].forEach(t => {
+            const card = document.getElementById('card-' + t);
+            const status = document.getElementById('status-' + t);
+            card.className = "screen-card sc-" + t;
+            card.style.transform = "scale(1)";
+            status.innerHTML = '<span class="sc-wait-text">WAITING...</span>';
+        });
+
+        const commandType = (resetMode === 'MANUAL') ? 'RESET_COMMAND_MANUAL' : 'RESET_COMMAND_AUTO';
+
+        connectedClients.forEach(conn => {
+            if (conn.open) {
+                conn.send({ type: commandType });
+            }
+        });
+    }
+
+    window.onload = initNetwork;
+</script>
+</body>
+</html>

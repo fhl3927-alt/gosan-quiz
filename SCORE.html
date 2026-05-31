@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>고산교회 성경퀴즈 - 실시간 점수판</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+        body { font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; background: #0b0d11; margin: 0; padding: 20px; color: white; min-height: 100vh; display: flex; flex-direction: column; align-items: center; }
+        
+        /* 타이틀 이미지 격 서체 크기를 2배 수준으로 대폭 확대 및 입체감 강화 */
+        h1 { 
+            font-size: 6.5rem; 
+            font-weight: 900; 
+            background: linear-gradient(to bottom, #ffffff 30%, #f1c40f 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center; 
+            margin-top: 15px;
+            margin-bottom: 35px; 
+            letter-spacing: -2px; 
+            filter: drop-shadow(0px 8px 16px rgba(0,0,0,0.8));
+        }
+
+        /* 4팀 가로 배치 그리드 */
+        .score-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; width: 100%; max-width: 1600px; flex: 1; }
+        
+        /* 팀 카드 베이스 디자인 */
+        .score-card { background: #11141a; border-radius: 25px; border: 5px solid #2d3748; padding: 30px 20px 20px 20px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; position: relative; transition: all 0.2s ease; min-height: 500px; }
+        
+        /* 팀별 테마 테두리 기본 색상 */
+        .card-spring { border-color: #1e7e34; }
+        .card-summer { border-color: #5dade2; }
+        .card-autumn { border-color: #935116; }
+        .card-winter { border-color: #7f8c8d; }
+
+        /* 1등 시 고유 테두리 선 굵기만 2배(10px) 확장 및 고유컬러 네온 글로우 효과 */
+        .score-card.leader { border-width: 10px; transform: scale(1.02); }
+        .card-spring.leader { box-shadow: 0 0 40px rgba(30, 126, 52, 0.6); }
+        .card-summer.leader { box-shadow: 0 0 40px rgba(93, 173, 226, 0.7); }
+        .card-autumn.leader { box-shadow: 0 0 40px rgba(147, 81, 22, 0.6); }
+        .card-winter.leader { box-shadow: 0 0 40px rgba(127, 140, 141, 0.6); }
+
+        /* 1위 배너 팀 고유 컬러 배경 배치 */
+        .leader-crown { 
+            display: none; 
+            position: absolute; 
+            top: -23px; 
+            left: 50%; 
+            transform: translateX(-50%); 
+            font-size: 20px; 
+            padding: 6px 22px; 
+            border-radius: 12px; 
+            font-weight: 900; 
+            border: 2px solid #ffffff;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.5); 
+            z-index: 10; 
+            white-space: nowrap; 
+        }
+        .score-card.leader .leader-crown { display: block; }
+        
+        .card-spring .leader-crown { background: #1e7e34; color: white; }
+        .card-summer .leader-crown { background: #5dade2; color: #0b0d11; }
+        .card-autumn .leader-crown { background: #935116; color: white; }
+        .card-winter .leader-crown { background: #7f8c8d; color: white; }
+
+        /* 팀 타이틀 스타일 */
+        .team-title { font-family: 'BM JUA', 'Jua', sans-serif; font-size: 3.9rem; font-weight: 900; margin: 0; text-shadow: 2px 2px 5px rgba(0,0,0,0.5); letter-spacing: 2px; }
+
+        /* 팀명과 점수 사이의 흐릿한 고유 컬러 실선 효과 */
+        .team-divider { width: 85%; height: 3px; margin-top: 10px; border-radius: 50%; filter: blur(0.8px); }
+        .card-spring .team-divider { background: linear-gradient(to right, transparent, rgba(30, 126, 52, 0.8) 50%, transparent); }
+        .card-summer .team-divider { background: linear-gradient(to right, transparent, rgba(93, 173, 226, 0.8) 50%, transparent); }
+        .card-autumn .team-divider { background: linear-gradient(to right, transparent, rgba(147, 81, 22, 0.8) 50%, transparent); }
+        .card-winter .team-divider { background: linear-gradient(to right, transparent, rgba(127, 140, 141, 0.8) 50%, transparent); }
+
+        /* 점수판 숫자의 위치를 위쪽 마진 조정을 통해 박스 중간 지점까지 아래로 하향 이동 */
+        .score-number { font-size: 9.5rem; font-weight: 900; text-shadow: 0 6px 20px rgba(0,0,0,0.6); font-family: 'Comic Sans MS', sans-serif; color: #ffffff; line-height: 1; margin: 110px 0 40px 0; }
+
+        /* ✨ 점수 변동 타입별 번쩍임 애니메이션 효과 분리 */
+        @keyframes flash-plus-trigger {
+            0% { filter: brightness(3.5) contrast(1.2); box-shadow: 0 0 60px #ffffff; z-index: 99; transform: scale(1.04); }
+            100% { filter: brightness(1) contrast(1); box-shadow: none; z-index: 1; transform: scale(1); }
+        }
+        @keyframes flash-minus-trigger {
+            0% { filter: brightness(1.5) contrast(1.1); box-shadow: 0 0 50px #e74c3c; border-color: #e74c3c; z-index: 99; transform: scale(0.98); }
+            100% { filter: brightness(1) contrast(1); box-shadow: none; z-index: 1; transform: scale(1); }
+        }
+        .flash-plus { animation: flash-plus-trigger 0.35s cubic-bezier(0.1, 0.8, 0.3, 1) forwards; }
+        .flash-minus { animation: flash-minus-trigger 0.35s cubic-bezier(0.1, 0.8, 0.3, 1) forwards; }
+
+        /* [수정] +10점과 -10점 버튼 사이 간격 벌림 (gap: 10px -> 18px) */
+        .btn-group { display: flex; flex-direction: column; gap: 18px; width: 100%; margin-top: auto; }
+        .score-btn { width: 100%; padding: 14px; font-size: 1.6rem; font-weight: 900; border-radius: 14px; border: none; cursor: pointer; transition: all 0.1s ease; text-shadow: 1px 2px 3px rgba(0,0,0,0.3); }
+        
+        .score-btn.plus { background: #2ecc71; color: white; box-shadow: 0 5px 0 #27ae60; }
+        .score-btn.plus:active { transform: translateY(5px); box-shadow: 0 0 0 #27ae60; }
+        
+        .score-btn.minus { background: #e74c3c; color: white; box-shadow: 0 5px 0 #c0392b; }
+        .score-btn.minus:active { transform: translateY(5px); box-shadow: 0 0 0 #c0392b; }
+
+        /* [수정] 점수 직접 수정 버튼 크기 2배 확대 (패딩 늘리고 font-size 11px -> 22px) */
+        .manual-btn { background: transparent; border: 2px solid #4a5568; color: #a0aec0; padding: 10px 16px; font-size: 22px; font-weight: bold; border-radius: 10px; cursor: pointer; margin-top: 18px; transition: 0.2s; width: 100%; }
+        .manual-btn:hover { background: #2d3748; color: white; border-color: #a0aec0; }
+
+        /* 하단 고정 대형 변동 기록 로그창 */
+        .bottom-log-container { background: #1a202c; border: 2px solid #2d3748; border-radius: 15px; padding: 15px; margin-top: 25px; width: 100%; max-width: 1600px; height: 320px; display: flex; flex-direction: column; }
+        
+        /* [수정] 로그 타이틀 글자 크기 50% 확대 (14px -> 21px) */
+        .log-title { font-size: 21px; font-weight: bold; color: #a0aec0; margin-bottom: 12px; border-bottom: 1px solid #2d3748; padding-bottom: 8px; }
+        .log-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+        
+        /* [수정] 로그 내역 글자 크기 50% 확대 (13px -> 19.5px) */
+        .log-item { background: #11141a; padding: 12px 20px; border-radius: 8px; font-size: 19.5px; display: flex; justify-content: space-between; align-items: center; border-left: 6px solid #f1c40f; }
+        
+        /* [수정] 로그 취소 버튼 글자 크기 50% 및 여백 확대 (11px -> 16.5px) */
+        .log-undo-btn { background: #c0392b; border: none; color: white; padding: 6px 14px; font-size: 16.5px; font-weight: bold; border-radius: 6px; cursor: pointer; }
+        .log-undo-btn:hover { background: #e74c3c; }
+
+        .quiz-branding-footer { font-size: 16px; font-weight: 800; letter-spacing: 2px; text-align: center; margin-top: 20px; opacity: 0.3; color: #ffffff; pointer-events: none; }
+    </style>
+</head>
+<body>
+
+    <h1>점수판(실시간)</h1>
+
+    <div class="score-grid">
+        <div class="score-card card-spring" id="card-spring">
+            <div class="leader-crown">1등 달리는 중 👑</div>
+            <h2 class="team-title">봄 🌿</h2>
+            <div class="team-divider"></div>
+            <div class="score-number" id="num-spring">0</div>
+            <div class="btn-group">
+                <button class="score-btn plus" onclick="addScore('spring', 10)">+10점</button>
+                <button class="score-btn minus" onclick="addScore('spring', -10)">-10점</button>
+            </div>
+            <button class="manual-btn" onclick="manualEdit('spring')">점수 직접 수정</button>
+        </div>
+
+        <div class="score-card card-summer" id="card-summer">
+            <div class="leader-crown">1등 달리는 중 👑</div>
+            <h2 class="team-title">여름 ☀️</h2>
+            <div class="team-divider"></div>
+            <div class="score-number" id="num-summer">0</div>
+            <div class="btn-group">
+                <button class="score-btn plus" onclick="addScore('summer', 10)">+10점</button>
+                <button class="score-btn minus" onclick="addScore('summer', -10)">-10점</button>
+            </div>
+            <button class="manual-btn" onclick="manualEdit('summer')">점수 직접 수정</button>
+        </div>
+
+        <div class="score-card card-autumn" id="card-autumn">
+            <div class="leader-crown">1등 달리는 중 👑</div>
+            <h2 class="team-title">가을 🍁</h2>
+            <div class="team-divider"></div>
+            <div class="score-number" id="num-autumn">0</div>
+            <div class="btn-group">
+                <button class="score-btn plus" onclick="addScore('autumn', 10)">+10점</button>
+                <button class="score-btn minus" onclick="addScore('autumn', -10)">-10점</button>
+            </div>
+            <button class="manual-btn" onclick="manualEdit('autumn')">점수 직접 수정</button>
+        </div>
+
+        <div class="score-card card-winter" id="card-winter">
+            <div class="leader-crown">1등 달리는 중 👑</div>
+            <h2 class="team-title">겨울 ❄️</h2>
+            <div class="team-divider"></div>
+            <div class="score-number" id="num-winter">0</div>
+            <div class="btn-group">
+                <button class="score-btn plus" onclick="addScore('winter', 10)">+10점</button>
+                <button class="score-btn minus" onclick="addScore('winter', -10)">-10점</button>
+            </div>
+            <button class="manual-btn" onclick="manualEdit('winter')">점수 직접 수정</button>
+        </div>
+    </div>
+
+    <div class="bottom-log-container">
+        <div class="log-title">⏱️ 점수 변동 기록 로그 (잘못 눌렀을 때 우측 취소 버튼 클릭)</div>
+        <div class="log-list" id="log-list-target">
+            <div style="text-align: center; color: #4a5568; font-weight: bold; margin: auto; padding: 20px; font-size: 21px;" id="no-log-msg">기록된 점수 변동이 없습니다.</div>
+        </div>
+    </div>
+
+    <div class="quiz-branding-footer">2026 고산교회 성경퀴즈</div>
+
+<script>
+    let scoreState = { spring: 0, summer: 0, autumn: 0, winter: 0 };
+    let logHistory = [];
+
+    const TEAM_NAMES = {
+        spring: "봄 🌿",
+        summer: "여름 ☀️",
+        autumn: "가을 🍁",
+        winter: "겨울 ❄️"
+    };
+
+    let audioCtx = null;
+
+    function initAudio() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+    }
+
+    function playSound(type) {
+        initAudio();
+        if (!audioCtx) return;
+
+        const now = audioCtx.currentTime;
+        
+        if (type === 'plus') {
+            const notes = [523.25, 659.25, 783.99]; 
+            notes.forEach((freq, index) => {
+                const osc = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, now + index * 0.08);
+                
+                gainNode.gain.setValueAtTime(0.15, now + index * 0.08);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, now + index * 0.08 + 0.2);
+                
+                osc.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                
+                osc.start(now + index * 0.08);
+                osc.stop(now + index * 0.08 + 0.2);
+            });
+        } else if (type === 'minus') {
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(300, now);
+            osc.frequency.exponentialRampToValueAtTime(100, now + 0.25);
+            
+            gainNode.gain.setValueAtTime(0.2, now);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+            
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            osc.start(now);
+            osc.stop(now + 0.25);
+        }
+    }
+
+    function triggerFlashEffect(teamId, actionType) {
+        const card = document.getElementById(`card-${teamId}`);
+        card.classList.remove('flash-plus', 'flash-minus'); 
+        void card.offsetWidth; 
+        
+        if (actionType === 'plus') {
+            card.classList.add('flash-plus');
+        } else {
+            card.classList.add('flash-minus');
+        }
+    }
+
+    function addScore(teamId, amount) {
+        scoreState[teamId] += amount;
+        
+        if (amount > 0) {
+            triggerFlashEffect(teamId, 'plus');
+            playSound('plus');
+        } else if (amount < 0) {
+            triggerFlashEffect(teamId, 'minus');
+            playSound('minus');
+        }
+
+        const logId = Date.now() + Math.random().toString(36).substr(2, 4);
+        logHistory.unshift({
+            id: logId,
+            teamId: teamId,
+            type: amount > 0 ? "점수 획득" : "점수 감점",
+            amount: amount
+        });
+
+        updateDisplay();
+    }
+
+    function undoScore(logId) {
+        const index = logHistory.findIndex(item => item.id === logId);
+        if (index !== -1) {
+            const target = logHistory[index];
+            scoreState[target.teamId] -= target.amount;
+            
+            const undoActionType = target.amount > 0 ? 'minus' : 'plus';
+            triggerFlashEffect(target.teamId, undoActionType); 
+            playSound(undoActionType);
+
+            logHistory.splice(index, 1);
+            updateDisplay();
+        }
+    }
+
+    function manualEdit(teamId) {
+        const current = scoreState[teamId];
+        const userInput = prompt(`[${TEAM_NAMES[teamId]}] 정정할 최종 점수를 입력하세요:`, current);
+        
+        if (userInput !== null) {
+            const parsed = parseInt(userInput.trim(), 10);
+            if (!isNaN(parsed)) {
+                const diff = parsed - current;
+                scoreState[teamId] = parsed;
+                
+                if (diff > 0) {
+                    triggerFlashEffect(teamId, 'plus');
+                    playSound('plus');
+                } else if (diff < 0) {
+                    triggerFlashEffect(teamId, 'minus');
+                    playSound('minus');
+                }
+
+                logHistory.unshift({
+                    id: Date.now() + 'm',
+                    teamId: teamId,
+                    type: "점수 직접 정정",
+                    amount: diff
+                });
+                updateDisplay();
+            } else {
+                alert("숫자만 입력해 주세요.");
+            }
+        }
+    }
+
+    function updateDisplay() {
+        let maxScore = -99999;
+
+        for (const team in scoreState) {
+            document.getElementById(`num-${team}`).innerText = scoreState[team];
+            if (scoreState[team] > maxScore) {
+                maxScore = scoreState[team];
+            }
+        }
+
+        for (const team in scoreState) {
+            const card = document.getElementById(`card-${team}`);
+            if (scoreState[team] === maxScore && maxScore > 0) {
+                card.classList.add('leader');
+            } else {
+                card.classList.remove('leader');
+            }
+        }
+
+        const targetZone = document.getElementById('log-list-target');
+        if (logHistory.length === 0) {
+            targetZone.innerHTML = '<div style="text-align: center; color: #4a5568; font-weight: bold; margin: auto; padding: 20px; font-size: 21px;">기록된 점수 변동이 없습니다.</div>';
+            return;
+        }
+
+        targetZone.innerHTML = "";
+        logHistory.forEach(log => {
+            const item = document.createElement('div');
+            item.className = "log-item";
+            const diffText = log.amount > 0 ? `+${log.amount}` : `${log.amount}`;
+            item.innerHTML = `
+                <span><strong>[${TEAM_NAMES[log.teamId]}]</strong> ${log.type} (${diffText}점)</span>
+                <button class="log-undo-btn" onclick="undoScore('${log.id}')">입력 취소 ↩️</button>
+            `;
+            targetZone.appendChild(item);
+        });
+    }
+</script>
+</body>
+</html>

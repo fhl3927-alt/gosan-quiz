@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>고산교회 성경퀴즈 - 관리자 마스터 패널</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.4.7/peerjs.min.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; background: #1a202c; margin: 0; padding: 0; color: white; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; }
+        
+        .admin-container { width: 100%; max-width: 450px; padding: 30px 20px; text-align: center; display: flex; flex-direction: column; gap: 20px; }
+        
+        .status-box { background: #2d3748; border: 2px solid #4a5568; border-radius: 15px; padding: 15px; font-size: 16px; font-weight: bold; color: #cbd5e0; line-height: 1.5; }
+        
+        .master-reset-btn { 
+            width: 100%; height: 260px; background: #e74c3c; color: white; font-size: 38px; font-weight: 900; border-radius: 35px; border: none; 
+            box-shadow: 0 16px 0 #c0392b; cursor: pointer; text-shadow: 2px 4px 6px rgba(0,0,0,0.4);
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; transition: 0.1s;
+        }
+        .master-reset-btn:active { transform: translateY(16px); box-shadow: 0 0 0 #c0392b; }
+        
+        .btn-sub-text { font-size: 18px; font-weight: bold; color: rgba(255,255,255,0.7); }
+        .quiz-branding-footer { font-size: 15px; font-weight: 800; letter-spacing: 2px; color: #718096; margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+    <div class="admin-container">
+        <h1 style="color: #e74c3c; font-weight: 900; font-size: 28px; margin: 0 0 10px 0;">⚙️ 사회자 원격 마스터 패널</h1>
+        
+        <div class="status-box">
+            통신 상태: <span id="net-status-text" style="color: #e67e22;">🔄 전광판 확인 중...</span>
+        </div>
+
+        <p style="color: #a0aec0; font-weight: bold; font-size: 15px; line-height: 1.5; margin: 10px 0;">
+            [전체 참여전] 진행 시 4개 팀의 제출 정답이 완료되면<br>아래 대왕 버튼을 눌러 다음 문제로 초기화해 주세요.
+        </p>
+
+        <!-- 마스터 리셋 대형 터치 버튼 -->
+        <button class="master-reset-btn" onclick="sendAdminMasterReset()">
+            전체 화면 리셋 🔄
+            <span class="btn-sub-text">(다음 문제 준비)</span>
+        </button>
+
+        <div class="quiz-branding-footer">2026 고산교회 성경퀴즈</div>
+    </div>
+
+<script>
+    const BROADCAST_ROOM_ID = 'church_bible_quiz_room_2026';
+    const PEER_CONFIG = { config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] } };
+
+    let peer = null;
+    let hostConn = null; 
+
+    function initNetwork() {
+        peer = new Peer(PEER_CONFIG);
+        peer.on('open', function() {
+            connectToHost();
+        });
+    }
+
+    function connectToHost() {
+        if (!peer || peer.destroyed) return;
+        const statusLog = document.getElementById('net-status-text');
+
+        hostConn = peer.connect(BROADCAST_ROOM_ID, { reliable: true });
+
+        hostConn.on('open', function() {
+            statusLog.innerText = "🟢 전광판 원격 제어 가능";
+            statusLog.style.color = "#2ecc71";
+        });
+
+        hostConn.on('close', function() {
+            statusLog.innerText = "🔴 연결 해제됨 (재연결 중...)";
+            statusLog.style.color = "#e74c3c";
+            setTimeout(connectToHost, 1500);
+        });
+    }
+
+    function sendAdminMasterReset() {
+        if (hostConn && hostConn.open) {
+            hostConn.send({ type: 'ADMIN_RESET' });
+        } else {
+            alert("전광판이 켜져 있지 않거나 주소 연결이 해제되어 있습니다. 메인 스크린 화면을 먼저 켜주세요.");
+        }
+    }
+
+    window.onload = initNetwork;
+</script>
+</body>
+</html>
